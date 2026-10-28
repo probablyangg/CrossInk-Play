@@ -1,0 +1,339 @@
+{
+  "schema_version": 1,
+  "repository": "probablyangg/CrossInk-Play",
+  "base_branch": "main",
+  "crossink": {
+    "repository": "uxjulia/CrossInk",
+    "tag": "v1.6.1",
+    "commit": "9914146eeae7b46b300f475a16c32426fc02ec1f"
+  },
+  "crossplay": {
+    "repository": "ma-r-s/crossplay",
+    "tag": "v1.14.2",
+    "commit": "0a1d17f41e1605d3b033d4327c81b3bcfb2ca2ab",
+    "scope": "Only the explicit imported paths below. This is not a full CrossPlay firmware merge. New games and changes outside these mappings require separate integration.",
+    "mappings": [
+      {
+        "source": "src/apps_local/battleship/",
+        "target": "src/apps_local/battleship/"
+      },
+      {
+        "source": "src/apps_local/cards/",
+        "target": "src/apps_local/cards/"
+      },
+      {
+        "source": "src/apps_local/checkers/",
+        "target": "src/apps_local/checkers/"
+      },
+      {
+        "source": "src/apps_local/chess/",
+        "target": "src/apps_local/chess/"
+      },
+      {
+        "source": "src/apps_local/connectfour/",
+        "target": "src/apps_local/connectfour/"
+      },
+      {
+        "source": "src/apps_local/connections/",
+        "target": "src/apps_local/connections/"
+      },
+      {
+        "source": "src/apps_local/dungeon/",
+        "target": "src/apps_local/dungeon/"
+      },
+      {
+        "source": "src/apps_local/forehead/",
+        "target": "src/apps_local/forehead/"
+      },
+      {
+        "source": "src/apps_local/go/",
+        "target": "src/apps_local/go/"
+      },
+      {
+        "source": "src/apps_local/hearts/",
+        "target": "src/apps_local/hearts/"
+      },
+      {
+        "source": "src/apps_local/hex/",
+        "target": "src/apps_local/hex/"
+      },
+      {
+        "source": "src/apps_local/insider/",
+        "target": "src/apps_local/insider/"
+      },
+      {
+        "source": "src/apps_local/jaipur/",
+        "target": "src/apps_local/jaipur/"
+      },
+      {
+        "source": "src/apps_local/knucklebones/",
+        "target": "src/apps_local/knucklebones/"
+      },
+      {
+        "source": "src/apps_local/link/",
+        "target": "src/apps_local/link/"
+      },
+      {
+        "source": "src/apps_local/minesweeper/",
+        "target": "src/apps_local/minesweeper/"
+      },
+      {
+        "source": "src/apps_local/murdle/",
+        "target": "src/apps_local/murdle/"
+      },
+      {
+        "source": "src/apps_local/picross/",
+        "target": "src/apps_local/picross/"
+      },
+      {
+        "source": "src/apps_local/player/",
+        "target": "src/apps_local/player/"
+      },
+      {
+        "source": "src/apps_local/seasalt/",
+        "target": "src/apps_local/seasalt/"
+      },
+      {
+        "source": "src/apps_local/solitaire/",
+        "target": "src/apps_local/solitaire/"
+      },
+      {
+        "source": "src/apps_local/sudoku/",
+        "target": "src/apps_local/sudoku/"
+      },
+      {
+        "source": "src/apps_local/toybattle/",
+        "target": "src/apps_local/toybattle/"
+      },
+      {
+        "source": "src/apps_local/trivia/",
+        "target": "src/apps_local/trivia/"
+      },
+      {
+        "source": "src/apps_local/ui/",
+        "target": "src/apps_local/ui/"
+      },
+      {
+        "source": "src/apps_local/underhand/",
+        "target": "src/apps_local/underhand/"
+      },
+      {
+        "source": "src/apps_local/wavelength/",
+        "target": "src/apps_local/wavelength/"
+      },
+      {
+        "source": "src/apps_local/wordle/",
+        "target": "src/apps_local/wordle/"
+      },
+      {
+        "source": "src/apps_local/yahtzee/",
+        "target": "src/apps_local/yahtzee/"
+      },
+      {
+        "source": "src/apps_local/Shelf.cpp",
+        "target": "src/apps_local/Shelf.cpp"
+      },
+      {
+        "source": "src/apps_local/Shelf.h",
+        "target": "src/apps_local/Shelf.h"
+      },
+      {
+        "source": "src/apps_local/ShelfFolderActivity.cpp",
+        "target": "src/apps_local/ShelfFolderActivity.cpp"
+      },
+      {
+        "source": "src/apps_local/ShelfFolderActivity.h",
+        "target": "src/apps_local/ShelfFolderActivity.h"
+      },
+      {
+        "source": "src/apps_local/ShelfHidden.cpp",
+        "target": "src/apps_local/ShelfHidden.cpp"
+      },
+      {
+        "source": "src/apps_local/ShelfHidden.h",
+        "target": "src/apps_local/ShelfHidden.h"
+      },
+      {
+        "source": "src/apps_local/ShelfScreen.cpp",
+        "target": "src/apps_local/ShelfScreen.cpp"
+      },
+      {
+        "source": "src/apps_local/ShelfScreen.h",
+        "target": "src/apps_local/ShelfScreen.h"
+      },
+      {
+        "source": "src/apps_local/ShelfState.cpp",
+        "target": "src/apps_local/ShelfState.cpp"
+      },
+      {
+        "source": "src/apps_local/ShelfState.h",
+        "target": "src/apps_local/ShelfState.h"
+      },
+      {
+        "source": "host-tests/battleship/",
+        "target": "host-tests-play/battleship/"
+      },
+      {
+        "source": "host-tests/checkers/",
+        "target": "host-tests-play/checkers/"
+      },
+      {
+        "source": "host-tests/chess/",
+        "target": "host-tests-play/chess/"
+      },
+      {
+        "source": "host-tests/connectfour/",
+        "target": "host-tests-play/connectfour/"
+      },
+      {
+        "source": "host-tests/connections/",
+        "target": "host-tests-play/connections/"
+      },
+      {
+        "source": "host-tests/deferredpaint/",
+        "target": "host-tests-play/deferredpaint/"
+      },
+      {
+        "source": "host-tests/dungeon/",
+        "target": "host-tests-play/dungeon/"
+      },
+      {
+        "source": "host-tests/forehead/",
+        "target": "host-tests-play/forehead/"
+      },
+      {
+        "source": "host-tests/go/",
+        "target": "host-tests-play/go/"
+      },
+      {
+        "source": "host-tests/hearts/",
+        "target": "host-tests-play/hearts/"
+      },
+      {
+        "source": "host-tests/hex/",
+        "target": "host-tests-play/hex/"
+      },
+      {
+        "source": "host-tests/insider/",
+        "target": "host-tests-play/insider/"
+      },
+      {
+        "source": "host-tests/jaipur/",
+        "target": "host-tests-play/jaipur/"
+      },
+      {
+        "source": "host-tests/knucklebones/",
+        "target": "host-tests-play/knucklebones/"
+      },
+      {
+        "source": "host-tests/link/",
+        "target": "host-tests-play/link/"
+      },
+      {
+        "source": "host-tests/minesweeper/",
+        "target": "host-tests-play/minesweeper/"
+      },
+      {
+        "source": "host-tests/murdle/",
+        "target": "host-tests-play/murdle/"
+      },
+      {
+        "source": "host-tests/picross/",
+        "target": "host-tests-play/picross/"
+      },
+      {
+        "source": "host-tests/player/",
+        "target": "host-tests-play/player/"
+      },
+      {
+        "source": "host-tests/revealsweep/",
+        "target": "host-tests-play/revealsweep/"
+      },
+      {
+        "source": "host-tests/seasalt/",
+        "target": "host-tests-play/seasalt/"
+      },
+      {
+        "source": "host-tests/shelfhidden/",
+        "target": "host-tests-play/shelfhidden/"
+      },
+      {
+        "source": "host-tests/shelfstate/",
+        "target": "host-tests-play/shelfstate/"
+      },
+      {
+        "source": "host-tests/solitaire/",
+        "target": "host-tests-play/solitaire/"
+      },
+      {
+        "source": "host-tests/sudoku/",
+        "target": "host-tests-play/sudoku/"
+      },
+      {
+        "source": "host-tests/toybattle/",
+        "target": "host-tests-play/toybattle/"
+      },
+      {
+        "source": "host-tests/trivia/",
+        "target": "host-tests-play/trivia/"
+      },
+      {
+        "source": "host-tests/underhand/",
+        "target": "host-tests-play/underhand/"
+      },
+      {
+        "source": "host-tests/wavelength/",
+        "target": "host-tests-play/wavelength/"
+      },
+      {
+        "source": "host-tests/wordle/",
+        "target": "host-tests-play/wordle/"
+      },
+      {
+        "source": "host-tests/yahtzee/",
+        "target": "host-tests-play/yahtzee/"
+      },
+      {
+        "source": "assets_local/pieces/celtic/",
+        "target": "assets_local/pieces/celtic/"
+      },
+      {
+        "source": "assets_local/go/",
+        "target": "assets_local/go/"
+      },
+      {
+        "source": "LICENSE",
+        "target": "src/apps_local/LICENSE.CrossPlay"
+      },
+      {
+        "source": "THIRD-PARTY-NOTICES.md",
+        "target": "src/apps_local/THIRD-PARTY-NOTICES.CrossPlay.md"
+      },
+      {
+        "source": "tools_local/trivia/pack_format.py",
+        "target": "host-tests-play/support/trivia/pack_format.py"
+      },
+      {
+        "source": "tools_local/trivia/reports.py",
+        "target": "host-tests-play/support/trivia/reports.py"
+      },
+      {
+        "source": "tools_local/wavelength/check_widths.py",
+        "target": "host-tests-play/support/wavelength/check_widths.py"
+      },
+      {
+        "source": "tools_local/wavelength/gen_pairs.py",
+        "target": "host-tests-play/support/wavelength/gen_pairs.py"
+      }
+    ]
+  },
+  "dependencies": {
+    "freeink_sdk": "699370183fa3a0e33c9cb83a36f701bbb6022095",
+    "simulator": "27655f1d36ef5f8610fedd798d5564d04c8f4320"
+  },
+  "review_required": [
+    "All update pull requests remain drafts until code and compatibility have been reviewed.",
+    "Run Play CI and review image size and source provenance before merging.",
+    "Verify reading continuity, saves, touch, frontlight, sleep/wake, and nearby play on the X4 Pro as applicable."
+  ]
+}

@@ -1,0 +1,143 @@
+name: Play - Publish download
+
+"on":
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: play-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'probablyangg/CrossInk-Play' && github.ref == 'refs/heads/main'
+    name: Validate the selected main revision
+    uses: ./.github/workflows/play-build.yml
+    with:
+      source_sha: ${{ github.sha }}
+    permissions:
+      contents: read
+
+  publish:
+    name: Publish the tested download
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+    env:
+      PLAY_SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
+      PLAY_VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      # There is deliberately no source checkout or source-script execution in
+      # this write-enabled job. Only this run's validated artifact is handled.
+      - name: Download this run's validated firmware
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: play-download
+
+      - name: Verify source identity and download hashes
+        id: release
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import re
+
+          root = Path("play-download")
+          sha = os.environ["PLAY_SOURCE_SHA"]
+          version = os.environ["PLAY_VERSION"]
+          if sha != os.environ["EXPECTED_SOURCE_SHA"] or not re.fullmatch(r"[0-9a-f]{40}", sha):
+              raise SystemExit("Release source differs from the revision selected for this run")
+          if not re.fullmatch(r"[A-Za-z0-9.-]+", version):
+              raise SystemExit("Invalid release version")
+          name = f"crossink-play-x4-pro-{version}"
+          expected = {f"{name}.zip", f"{name}-app.bin", "build-info.json", "validation.json"}
+          seen = set()
+          for line in (root / "SHA256SUMS.txt").read_text().splitlines():
+              digest, filename = line.split("  ", 1)
+              if filename not in expected or filename in seen or not re.fullmatch(r"[0-9a-f]{64}", digest):
+                  raise SystemExit("Unexpected checksum entry")
+              path = root / filename
+              if path.is_symlink() or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+                  raise SystemExit(f"Invalid release file: {filename}")
+              seen.add(filename)
+          if seen != expected or {p.name for p in root.iterdir()} != expected | {"SHA256SUMS.txt"}:
+              raise SystemExit("Incomplete or unexpected release files")
+          info = json.loads((root / "build-info.json").read_text())
+          validation = json.loads((root / "validation.json").read_text())
+          for item in (info, validation):
+              if item["source_commit"] != sha or item["version"] != version:
+                  raise SystemExit("Release metadata does not match the validated source")
+          if validation["workflow_run_id"] != os.environ["GITHUB_RUN_ID"]:
+              raise SystemExit("The firmware was not validated by this workflow run")
+          if set(validation["checks"]) != {"maintenance", "games", "reader", "firmware", "package", "play-smoke", "home-themes"}:
+              raise SystemExit("The firmware is missing required automated checks")
+          if info["board"] != "x4pro" or info["physical_device_tested"] or validation["physical_device_tested"]:
+              raise SystemExit("Unexpected device or hardware-validation claim")
+          tag = f"play-v{version}-{sha[:12]}"
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"tag={tag}\n")
+          notes = (
+              f"CrossInk Play {version} for **Xteink X4 Pro only**.\n\n"
+              f"Built from `{sha}`. Game, reader, simulator, image, and package checks passed. "
+              "This remains a prerelease; physical-device testing is still required.\n\n"
+              "### Download\n\n"
+              f"- **First installation:** download `{name}.zip` and follow `INSTALL.md` inside.\n"
+              f"- **Already running Play:** download `{name}-app.bin`, copy it to the SD card, "
+              "then use **Settings → System → SD Card Firmware Update**.\n"
+              "- `SHA256SUMS.txt` covers the download files.\n\n"
+              "The merged USB image inside the ZIP is not an SD update file. "
+              "Back up the SD card, including its hidden `.crosspoint` folder, before updating.\n"
+          )
+          Path("release-notes.md").write_text(notes)
+          PY
+
+      - name: Reject an existing release or tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PLAY_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import urllib.error
+          import urllib.request
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          tag = os.environ["PLAY_TAG"]
+          for suffix in (f"releases/tags/{tag}", f"git/ref/tags/{tag}"):
+              request = urllib.request.Request(
+                  f"https://api.github.com/repos/{repo}/{suffix}",
+                  headers={"Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                           "Accept": "application/vnd.github+json",
+                           "X-GitHub-Api-Version": "2022-11-28"},
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=30):
+                      raise SystemExit(f"{tag} already exists. Existing downloads are never overwritten.")
+              except urllib.error.HTTPError as error:
+                  if error.code != 404:
+                      raise SystemExit(f"Could not check existing release: GitHub returned {error.code}")
+          PY
+
+      - name: Publish a new prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PLAY_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          gh release create "$PLAY_TAG" play-download/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$PLAY_SOURCE_SHA" \
+            --title "CrossInk Play $PLAY_VERSION (${PLAY_SOURCE_SHA:0:12})" \
+            --notes-file release-notes.md \
+            --prerelease
+          printf '## Download published\n\nhttps://github.com/%s/releases/tag/%s\n' \
+            "$GITHUB_REPOSITORY" "$PLAY_TAG" >> "$GITHUB_STEP_SUMMARY"

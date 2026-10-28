@@ -1,0 +1,211 @@
+name: Play - Build firmware
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      source_sha:
+        description: Exact source commit selected by the release workflow
+        type: string
+        required: true
+    outputs:
+      artifact_name:
+        value: ${{ jobs.validate.outputs.artifact_name }}
+      source_sha:
+        value: ${{ jobs.validate.outputs.source_sha }}
+      version:
+        value: ${{ jobs.validate.outputs.version }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: play-build-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  validate:
+    name: Test and package X4 Pro
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    outputs:
+      artifact_name: ${{ steps.identity.outputs.artifact_name }}
+      source_sha: ${{ steps.identity.outputs.source_sha }}
+      version: ${{ steps.identity.outputs.version }}
+    env:
+      PLAY_SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
+      PLATFORMIO_CORE_DIR: ${{ github.workspace }}/.platformio-core
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+    steps:
+      - name: Check out the exact source revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node for the web asset minifier
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      - name: Identify this build
+        id: identity
+        run: |
+          mkdir -p play-logs
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+
+          sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          if sha != os.environ["PLAY_SOURCE_SHA"] or not re.fullmatch(r"[0-9a-f]{40}", sha):
+              raise SystemExit("The checkout does not match the requested source commit")
+          header = Path("include/PlayVersion.h").read_text()
+          match = re.search(r'^#define CROSSINK_PLAY_VERSION "([A-Za-z0-9.-]+)"$', header, re.M)
+          if not match:
+              raise SystemExit("Missing or invalid CrossInk Play version")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"source_sha={sha}\nversion={match[1]}\n")
+              output.write(f"artifact_name=crossink-play-x4-pro-{sha[:12]}\n")
+          PY
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkg-config \
+            libsdl2-dev libssl-dev libfreetype6-dev librsvg2-bin \
+            libexpat1-dev zlib1g-dev
+          python3 -m pip install 'platformio==6.2.0' \
+            -r lib/EpdFont/scripts/requirements.txt pillow brotli
+
+      - name: Test maintenance and package tooling
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s scripts -p 'test_play_*.py' -v \
+            2>&1 | tee play-logs/maintenance-tests.log
+
+      - name: Test game rules, saves, UI, and runtime
+        run: |
+          set -euo pipefail
+          sh host-tests-play/run.sh 2>&1 | tee play-logs/game-tests.log
+
+      - name: Test reader components
+        run: |
+          set -euo pipefail
+          cmake -S test -B build/play-reader-tests -G Ninja \
+            2>&1 | tee play-logs/reader-configure.log
+          cmake --build build/play-reader-tests --parallel 2 \
+            2>&1 | tee play-logs/reader-build.log
+          ctest --test-dir build/play-reader-tests --output-on-failure --parallel 2 \
+            2>&1 | tee play-logs/reader-tests.log
+
+      # Keep firmware and simulator sequential: PlatformIO shares generated
+      # assets and can invalidate build state after configuration changes.
+      - name: Build X4 Pro firmware
+        run: |
+          set -euo pipefail
+          pio run -e x4-pro -j 2 2>&1 | tee play-logs/firmware-build.log
+
+      - name: Package and verify the firmware
+        run: |
+          set -euo pipefail
+          python3 scripts/package_play.py --output-dir dist-ci \
+            2>&1 | tee play-logs/package.log
+
+      - name: Build the X4 Pro simulator
+        run: |
+          set -euo pipefail
+          pio run -e x4-pro-simulator -j 2 2>&1 | tee play-logs/simulator-build.log
+
+      - name: Check the reader, Play, and Home themes
+        run: |
+          set -euo pipefail
+          python3 scripts/run_simulator_smoke_test.py \
+            --env x4-pro-simulator --no-build --play --timeout 120 \
+            --play-captures play-logs/screens \
+            2>&1 | tee play-logs/play-smoke.log
+          python3 scripts/run_simulator_smoke_test.py \
+            --env x4-pro-simulator --no-build --home-themes --timeout 90 \
+            2>&1 | tee play-logs/home-themes-smoke.log
+
+      - name: Prepare the validated download
+        env:
+          PLAY_VERSION: ${{ steps.identity.outputs.version }}
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import shutil
+          import subprocess
+          import zipfile
+
+          name = f"crossink-play-x4-pro-{os.environ['PLAY_VERSION']}"
+          package = Path("dist-ci") / name
+          archive = Path("dist-ci") / f"{name}.zip"
+          info = json.loads((package / "build-info.json").read_text())
+          if info["source_commit"] != os.environ["PLAY_SOURCE_SHA"]:
+              raise SystemExit("Packaged source revision differs from the validated checkout")
+          if info["version"] != os.environ["PLAY_VERSION"] or info["board"] != "x4pro":
+              raise SystemExit("Packaged version or device is incorrect")
+          subprocess.run(["python3", str(package / "flash_play.py"), "--check-only"], check=True)
+          with zipfile.ZipFile(archive) as zipped:
+              if zipped.testzip() is not None:
+                  raise SystemExit("Corrupt package ZIP")
+          download = Path("play-download")
+          download.mkdir()
+          for source in (archive, package / f"{name}-app.bin", package / "build-info.json"):
+              shutil.copy2(source, download / source.name)
+          evidence = {
+              "source_commit": os.environ["PLAY_SOURCE_SHA"],
+              "workflow_run_id": os.environ["GITHUB_RUN_ID"],
+              "version": os.environ["PLAY_VERSION"],
+              "checks": ["maintenance", "games", "reader", "firmware", "package", "play-smoke", "home-themes"],
+              "physical_device_tested": False,
+          }
+          (download / "validation.json").write_text(json.dumps(evidence, indent=2) + "\n")
+          checksums = "".join(
+              f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n"
+              for path in sorted(download.iterdir())
+          )
+          (download / "SHA256SUMS.txt").write_text(checksums)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write("## CrossInk Play download ready\n\n")
+              summary.write(f"Source: `{os.environ['PLAY_SOURCE_SHA']}`\n\n")
+              summary.write(f"Application: {info['application_bytes']:,} bytes; ")
+              summary.write(f"{info['application_free_bytes']:,} bytes free per slot.\n\n")
+              summary.write("Download the firmware artifact below. Use its **-app.bin** for an SD update ")
+              summary.write("after the initial Play USB installation. The ZIP contains the USB installer.\n\n")
+              summary.write("All automated checks passed. Physical X4 Pro checks remain required.\n")
+          PY
+
+      - name: Upload validated firmware
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ${{ steps.identity.outputs.artifact_name }}
+          path: play-download/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Keep build logs and simulator captures
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: play-validation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: play-logs/
+          if-no-files-found: warn
+          retention-days: 14

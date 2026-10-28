@@ -1,0 +1,33 @@
+name: Request a Play game
+description: Add a game to CrossInk Play on the Xteink X4 Pro.
+title: "Game: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This creates a game implementation request. The game will need to be written or ported, tested, and included in a new CrossInk Play firmware build.
+  - type: input
+    id: game
+    attributes:
+      label: Game
+      description: Name of the game to add.
+      placeholder: Reversi
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Source or rules
+      description: Link to its CrossPlay entry, source repository, or rules. Leave blank for a new idea.
+      placeholder: https://github.com/owner/game
+    validations:
+      required: false
+  - type: textarea
+    id: play
+    attributes:
+      label: How it should play
+      description: Describe solo or multiplayer play and the touch/button controls. Include save/resume needs or other details that affect the game.
+      placeholder: |
+        Solo against the computer. Tap a square to place a piece, use Back to return to the menu, and resume the board after sleep.
+    validations:
+      required: true

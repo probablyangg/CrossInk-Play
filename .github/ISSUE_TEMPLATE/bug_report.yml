@@ -6,20 +6,16 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to report this bug! Please fill out the details below. If you have a feature request, please use the [Discussions](https://github.com/uxjulia/CrossInk/discussions/categories/ideas) feature so that issues focuses only on immediate bugs.
+        Report a problem with CrossInk Play on the Xteink X4 Pro. To add another game, use the [game request form](https://github.com/probablyangg/CrossInk-Play/issues/new?template=play-game-request.yml). Build and update instructions are in the [maintenance guide](https://github.com/probablyangg/CrossInk-Play/blob/main/docs/play-maintenance.md).
 
   - type: dropdown
     id: device-type
     attributes:
       label: Device
-      description: Which device is this affecting?
+      description: CrossInk Play currently targets the Xteink X4 Pro.
       options:
-        - "--- Select ---"
-        - X4
-        - X3
         - X4 Pro
-        - X4 Classic
-        - Seeed Sticky
+      default: 0
     validations:
       required: true
 
@@ -27,8 +23,8 @@ body:
     id: version
     attributes:
       label: Affected Version
-      description: What version of the project/library are you using? (e.g., v1.2.3, master branch commit SHA)
-      placeholder: Ex. v1.2.3
+      description: CrossInk Play version and source commit, if available in the download's build-info.json.
+      placeholder: 0.1.0-alpha.1
     validations:
       required: true
 
@@ -93,12 +89,11 @@ body:
     id: epub-attachment
     attributes:
       label: File Provided
-      description: If your issue is related to a specific file (EPUB, XTC, etc.), please make sure to attach the exact file in this ticket or email it to julia@uxj.io and reference your issue number. **_EPUBs and XTC files need to be zipped to be attached._**
+      description: If the problem depends on a specific EPUB, XTC, or other file, attach it to this issue. EPUB and XTC files need to be zipped first.
       options:
         - "--- Select ---"
         - Not Applicable
         - I've attached it
-        - I've emailed it
     validations:
       required: true
 

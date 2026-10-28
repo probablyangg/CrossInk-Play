@@ -9,6 +9,23 @@ flash)**.
 X4 Pro testing is still required. Do not use its firmware on an X3, X4,
 X4 Classic, or Sticky.
 
+## Maintain and download
+
+| Task | Open | Result |
+| --- | --- | --- |
+| Build the current firmware | [Build firmware](https://github.com/probablyangg/CrossInk-Play/actions/workflows/play-build.yml) | Choose **Run workflow** on `main`; download the tested X4 Pro package from the completed run. |
+| Check CrossInk and CrossPlay | [Check upstream updates](https://github.com/probablyangg/CrossInk-Play/actions/workflows/play-upstream.yml) | Check both release feeds and prepare draft update pull requests when changes are available. |
+| Add a game request | [Request a game](https://github.com/probablyangg/CrossInk-Play/issues/new?template=play-game-request.yml) | Record the game, source or rules, and desired controls for implementation. |
+| Download a published build | [Downloads](https://github.com/probablyangg/CrossInk-Play/releases) | Download a packaged prerelease with its source revision and checksums. |
+
+GitHub runs the builds and checks; a local compiler is not needed for these
+actions. The upstream workflow is scheduled daily. Updates remain draft pull
+requests until their changes are reviewed and tested; new games still need
+code to be written or ported.
+
+See [Easy maintenance](docs/play-maintenance.md) for the button-by-button flow,
+the one-time GitHub settings, and installation of later builds.
+
 ## Preview
 
 Actual X4 Pro simulator captures from the tested build:

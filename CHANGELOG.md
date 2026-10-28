@@ -1,3 +1,19 @@
+## [Unreleased]
+
+### Added
+
+- GitHub actions to check CrossInk and CrossPlay releases, prepare draft update
+  pull requests, build and test X4 Pro firmware, and publish packaged downloads.
+- A source-version manifest for repeatable upstream updates, with explicit
+  reports when an update needs adaptation or introduces games outside the import.
+- A maintenance guide and game request form linked from the repository home page.
+
+### Changed
+
+- Archived CrossInk-specific release, deployment, font-publishing, and triage
+  workflows; retained the existing CI checks alongside the Play workflows.
+- Bug reports now use this fork's X4 Pro support and game-request routes.
+
 ## [CrossInk Play 0.1.0-alpha.1] - 2026-10-28
 
 ### Added

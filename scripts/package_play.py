@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import configparser
 import hashlib
 import json
 import os
@@ -16,6 +17,7 @@ import zipfile
 
 
 from flash_play import APP_LIMIT, APP_OFFSET, check_esp32s3, check_initial_ota, check_partitions, verify_package
+from play_upstream import MaintenanceError, validate_manifest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,11 +27,45 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def load_upstream_provenance(project: Path) -> dict:
+    """Read recorded baselines and reject dependency provenance that is stale."""
+    try:
+        upstreams = validate_manifest(json.loads((project / "maintenance/upstreams.json").read_text()))
+    except (OSError, ValueError, KeyError, TypeError, MaintenanceError) as error:
+        raise RuntimeError("Cannot package without valid upstream provenance: " + str(error)) from error
+    sdk = project / "freeink-sdk"
+    if not (sdk / ".git").exists():
+        raise RuntimeError("Cannot verify upstream provenance: initialize the FreeInk SDK submodule")
+    try:
+        sdk_commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=sdk, text=True, stderr=subprocess.PIPE
+        ).strip()
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise RuntimeError("Cannot verify the FreeInk SDK commit for this package") from error
+    if sdk_commit != upstreams["dependencies"]["freeink_sdk"]:
+        raise RuntimeError("The FreeInk SDK checkout does not match maintenance/upstreams.json")
+    try:
+        config = configparser.ConfigParser(interpolation=None)
+        config.read_string((project / "platformio.ini").read_text())
+        simulator_deps = config.get("simulator-base", "lib_deps")
+        simulator_pins = re.findall(
+            r"^\s*simulator\s*=\s*https://github\.com/uxjulia/crossink-simulator(?:\.git)?#([0-9a-f]{40})\s*$",
+            simulator_deps, flags=re.MULTILINE,
+        )
+    except (OSError, configparser.Error) as error:
+        raise RuntimeError("Cannot verify the simulator dependency in platformio.ini") from error
+    if simulator_pins != [upstreams["dependencies"]["simulator"]]:
+        raise RuntimeError("The simulator pin does not match maintenance/upstreams.json")
+    return upstreams
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build-dir", type=Path, default=ROOT / ".pio/build/x4-pro")
     parser.add_argument("--output-dir", type=Path, default=ROOT / "dist-publish")
     args = parser.parse_args()
+    upstreams = load_upstream_provenance(ROOT)
+    upstream_bytes = (json.dumps(upstreams, indent=2) + "\n").encode()
     version_text = (ROOT / "include/PlayVersion.h").read_text()
     version = re.search(r'#define CROSSINK_PLAY_VERSION "([A-Za-z0-9.-]+)"', version_text).group(1)
     name = f"crossink-play-x4-pro-{version}"
@@ -77,6 +113,7 @@ def main() -> int:
         ("partitions-x4-pro-play.csv", "partitions-x4-pro-play.csv"),
     ):
         shutil.copy2(ROOT / source, output / destination)
+    (output / "UPSTREAMS.json").write_bytes(upstream_bytes)
 
     # Include the SDK's root notices and the actual linked Arduino libraries,
     # not only notices found in the application source tree.
@@ -106,8 +143,13 @@ def main() -> int:
         "flash_bytes": 0x1000000, "app_slot_bytes": APP_LIMIT,
         "application_bytes": len(firmware), "application_free_bytes": APP_LIMIT - len(firmware),
         "source_commit": source_commit, "tracked_diff_sha256": hashlib.sha256(tracked_diff).hexdigest(),
-        "crossink_base": "9914146eeae7b46b300f475a16c32426fc02ec1f",
-        "crossplay_base": "0a1d17f41e1605d3b033d4327c81b3bcfb2ca2ab",
+        "crossink_base": upstreams["crossink"]["commit"],
+        "crossplay_base": upstreams["crossplay"]["commit"],
+        "crossink_tag": upstreams["crossink"]["tag"],
+        "crossplay_tag": upstreams["crossplay"]["tag"],
+        "dependencies": upstreams["dependencies"],
+        "upstream_manifest": "UPSTREAMS.json",
+        "upstream_manifest_sha256": hashlib.sha256(upstream_bytes).hexdigest(),
         "physical_device_tested": False,
         "usb_components": [{"offset": hex(offset), "file": destination} for offset, _, destination in components],
     }
