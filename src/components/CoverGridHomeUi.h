@@ -18,6 +18,12 @@ class CoverGridHomeUi final : public UiAppHost<16, 1> {
   static constexpr int GRID_COLUMNS = 3;
   static constexpr int GRID_ROWS = 2;
   static constexpr int MAX_BOOKS = 1 + GRID_COLUMNS * GRID_ROWS;
+#if defined(CROSSINK_PLAY)
+  static constexpr int MAX_TABS = 6;
+#else
+  static constexpr int MAX_TABS = 5;
+#endif
+  static constexpr int tabCount(bool hasOpds) { return MAX_TABS - (hasOpds ? 0 : 1); }
   static_assert(MAX_BOOKS <= HomeCoverCache::MAX_COVERS);
   explicit CoverGridHomeUi(GfxRenderer& renderer);
   void begin(const std::vector<RecentBook>& books, bool hasOpds, bool hasContinueReading, float featuredProgress);
@@ -61,5 +67,5 @@ class CoverGridHomeUi final : public UiAppHost<16, 1> {
   freeink::ui::CoverGridProps grid;
   freeink::ui::Rect gridBounds{};
   freeink::ui::TabBarProps tabs;
-  std::array<freeink::ui::TabItem, 5> tabItems;
+  std::array<freeink::ui::TabItem, MAX_TABS> tabItems;
 };

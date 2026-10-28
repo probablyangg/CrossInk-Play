@@ -53,6 +53,14 @@
 #include "components/UITheme.h"
 #include "simulator/SimulatorHomeKeyInput.h"
 #include "util/ButtonShortcutController.h"
+#if defined(CROSSINK_PLAY)
+#include "activities/reader/EpubReaderUtils.h"
+#include "apps_local/Shelf.h"
+#include "apps_local/ShelfScreen.h"
+#include "apps_local/minesweeper/MinesweeperScreens.h"
+#include "apps_local/ui/ToyboxTheme.h"
+#include "components/TouchRegistry.h"
+#endif
 
 extern ActivityManager activityManager;
 extern GfxRenderer renderer;
@@ -95,6 +103,20 @@ enum class SmokeStep : uint8_t {
   ThemeFresh,
   StatusBarEditor,
   StatusBarPicker,
+#if defined(CROSSINK_PLAY)
+  PlayInitialHome,
+  PlayReaderReady,
+  PlayReaderPage,
+  PlayHome,
+  PlayMenu,
+  PlayFolder,
+  PlayGameMenu,
+  PlayGameBoard,
+  PlayGameMoved,
+  PlayReturnedHome,
+  PlayResumedReader,
+  PlayNextTheme,
+#endif
   Done,
 };
 
@@ -131,6 +153,9 @@ class SimulatorSmokeTest {
     Press,
     Release,
     HomeTap,
+#if defined(CROSSINK_PLAY)
+    WaitForHomeTap,
+#endif
     HomeLongPress,
     ConfigureHomeButtonPowerLock,
     WaitForPowerLongPress,
@@ -184,6 +209,14 @@ class SimulatorSmokeTest {
   unsigned homeThemePass = 0;
   uint64_t homeThemeScreenHash = 0;
   std::string homeThemeBookPath;
+#if defined(CROSSINK_PLAY)
+  unsigned playThemePass = 0;
+  uint64_t playReaderPageHash = 0;
+  uint64_t playBoardHash = 0;
+  EpubReaderUtils::Progress playReaderProgress;
+  BookReadingStats playReaderStats;
+  uint32_t playHomeTapStartedAt = 0;
+#endif
 
   uint8_t homeReaderReaderKind = 0;
   uint8_t homeReaderCancelledMask = 0;
@@ -915,6 +948,114 @@ class SimulatorSmokeTest {
     step = nextStep;
   }
 
+#if defined(CROSSINK_PLAY)
+  static void capturePlayScreen(const std::string& name) {
+    const char* output = std::getenv("CROSSINK_SIMULATOR_SMOKE_PLAY_CAPTURES");
+    if (!output) return;
+    std::filesystem::create_directories(output);
+    const auto path = std::filesystem::path(output) / (name + ".pgm");
+    FILE* image = std::fopen(path.c_str(), "wb");
+    if (!image) fail("Cannot create Play capture: %s", path.c_str());
+    RenderLock lock;
+    const int width = renderer.getScreenWidth();
+    const int height = renderer.getScreenHeight();
+    std::fprintf(image, "P5\n%d %d\n255\n", width, height);
+    for (int y = 0; y < height; ++y) {
+      for (int x = 0; x < width; ++x) std::fputc(renderer.isPixelBlack(x, y) ? 0 : 255, image);
+    }
+    if (std::fclose(image) != 0) fail("Could not finish Play capture: %s", path.c_str());
+  }
+
+  void beginPlayInput(const SmokeStep next) {
+    inputScript.clear();
+    scriptIndex = 0;
+    inputCompletionStep = next;
+    step = SmokeStep::ReaderInput;
+  }
+
+  void addPlayHomeTap() {
+    inputScript.push_back(homeTap());
+    inputScript.push_back({ScriptActionType::WaitForHomeTap, MappedInputManager::Button::Back, nullptr, 0, 0, 0});
+  }
+
+  void addPlayTouch(const int x, const int y) {
+    inputScript.push_back(touchDown(x, y));
+    inputScript.push_back(touchRelease(x, y));
+  }
+
+  void addPlayBack(const char* label, const char* expectedActivity) {
+    // The X4 Pro has no physical Back key. Exercise its left-edge back swipe.
+    const int y = renderer.getScreenHeight() / 2;
+    const int endX = renderer.getScreenWidth() * 3 / 4;
+    inputScript.push_back(touchDown(8, y));
+    inputScript.push_back(touchMove(endX, y));
+    inputScript.push_back(touchRelease(endX, y));
+    inputScript.push_back(render(label, 8));
+    inputScript.push_back(assertActivity(expectedActivity));
+  }
+
+  void addRegisteredHomeTouch(const TouchRegistry::Kind kind, const int requestedId = -1) {
+    // Find a point in the published, visible target. A negative ID selects the
+    // last menu row, so optional reading-stat/OPDS entries cannot shift Play.
+    // The test still injects a real touch through MappedInputManager.
+    RenderLock lock;
+    const int width = renderer.getScreenWidth();
+    const int height = renderer.getScreenHeight();
+    int selected = -1;
+    int left = width, top = height, right = -1, bottom = -1;
+    for (int y = 8; y < height; y += 8) {
+      for (int x = 8; x < width; x += 8) {
+        int id = -1;
+        if (!TouchRegistry::getInstance().hitTest(x, y, kind, id) || (requestedId >= 0 && id != requestedId) ||
+            id < selected)
+          continue;
+        if (id > selected) {
+          selected = id;
+          left = right = x;
+          top = bottom = y;
+        } else {
+          left = std::min(left, x);
+          right = std::max(right, x);
+          top = std::min(top, y);
+          bottom = std::max(bottom, y);
+        }
+      }
+    }
+    if (selected < 0) fail("Play smoke could not find Home touch target kind=%d id=%d", kind, requestedId);
+    addPlayTouch((left + right) / 2, (top + bottom) / 2);
+  }
+
+  static EpubReaderUtils::Progress loadPlayReaderProgress() {
+    const char* bookPath = std::getenv("CROSSINK_SIMULATOR_SMOKE_BOOK");
+    EpubReaderUtils::Progress progress;
+    if (!EpubReaderUtils::loadProgress(Epub(bookPath, "/.crosspoint"), progress, "SMOKE"))
+      fail("Play smoke could not read the EPUB's saved position");
+    return progress;
+  }
+
+  void verifyPlayReaderProgress() const {
+    const auto progress = loadPlayReaderProgress();
+    if (progress.spineIndex != playReaderProgress.spineIndex || progress.pageNumber != playReaderProgress.pageNumber ||
+        progress.pageCount != playReaderProgress.pageCount ||
+        progress.hasPageCount != playReaderProgress.hasPageCount ||
+        progress.visibleTextOffset != playReaderProgress.visibleTextOffset ||
+        progress.hasVisibleTextOffset != playReaderProgress.hasVisibleTextOffset)
+      fail("Play changed the EPUB's saved reading position");
+  }
+
+  static uint64_t playReaderBodyHash() {
+    RenderLock lock;
+    // Exclude header/footer clocks and session counters; compare the book ink.
+    const int width = renderer.getScreenWidth();
+    const int height = renderer.getScreenHeight() - 160;
+    const size_t size = renderer.getRegionByteSize(0, 80, width, height);
+    std::vector<uint8_t> bytes(size);
+    if (!renderer.copyRegionToBuffer(0, 80, width, height, bytes.data(), size))
+      fail("Play smoke could not snapshot the reader page");
+    return hashBytes(bytes.data(), bytes.size());
+  }
+#endif
+
   void verifyLoadingPopupBackdrop() {
     RenderLock lock;
     const auto originalOrientation = renderer.getOrientation();
@@ -1228,6 +1369,25 @@ class SimulatorSmokeTest {
     switch (step) {
       case SmokeStep::Start:
         LOG_INF("SMOKE", "Starting simulator smoke test");
+        if (std::getenv("CROSSINK_SIMULATOR_SMOKE_PLAY")) {
+#if defined(CROSSINK_PLAY)
+          if (!mappedInputManager.hasHomeKey() || !mappedInputManager.hasTouchHardware())
+            fail("Play smoke requires the X4 Pro simulator");
+          const char* bookPath = std::getenv("CROSSINK_SIMULATOR_SMOKE_BOOK");
+          if (!bookPath || !Storage.exists(bookPath)) fail("Play smoke EPUB fixture is missing");
+          SETTINGS.uiTheme = CrossPointSettings::LYRA;
+          SETTINGS.uiScale = CrossPointSettings::UI_SCALE_SMALL;
+          SETTINGS.trackReadingStats = 1;
+          SETTINGS.homeButtonInReaderEnabled = 1;
+          UITheme::getInstance().reload();
+          RECENT_BOOKS.addOrUpdateBook(bookPath, "Play reader fixture", {}, {}, RecentBook::CoverState::Missing);
+          activityManager.goHome();
+          queueStep("Play smoke Home with EPUB fixture", SmokeStep::PlayInitialHome, 8);
+          break;
+#else
+          fail("Play smoke requires a simulator built with CROSSINK_PLAY");
+#endif
+        }
         if (std::getenv("CROSSINK_SIMULATOR_SMOKE_STATUS_BARS")) {
           verifyStatusBarSettings();
           SETTINGS.clockDateHasBeenSynced = true;
@@ -2057,6 +2217,212 @@ class SimulatorSmokeTest {
         break;
       }
 
+#if defined(CROSSINK_PLAY)
+      case SmokeStep::PlayInitialHome:
+        beginPlayInput(SmokeStep::PlayReaderReady);
+        addRegisteredHomeTouch(TouchRegistry::Cover, 0);
+        inputScript.push_back(render("EPUB opened from Home before Play", 20));
+        inputScript.push_back(assertActivity("EpubReader"));
+        break;
+
+      case SmokeStep::PlayReaderReady:
+        beginPlayInput(SmokeStep::PlayReaderPage);
+        addTap(MappedInputManager::Button::Down);
+        inputScript.push_back(render("Reader page turn before Play", 12));
+        inputScript.push_back(assertActivity("EpubReader"));
+        break;
+
+      case SmokeStep::PlayReaderPage:
+        playReaderPageHash = playReaderBodyHash();
+        capturePlayScreen("reader-before-play");
+        beginPlayInput(SmokeStep::PlayHome);
+        addPlayHomeTap();
+        inputScript.push_back(render("Home after reading before Play", 8));
+        inputScript.push_back(assertActivity("Home"));
+        break;
+
+      case SmokeStep::PlayHome: {
+        if (playThemePass == 0) {
+          playReaderProgress = loadPlayReaderProgress();
+          if (playReaderProgress.pageNumber == 0 && playReaderProgress.spineIndex == 0)
+            fail("Play smoke's reader page-forward input did not advance");
+          const char* bookPath = std::getenv("CROSSINK_SIMULATOR_SMOKE_BOOK");
+          playReaderStats = BookReadingStats::load(Epub(bookPath, "/.crosspoint").getCachePath());
+        }
+        const int width = renderer.getScreenWidth();
+        const int height = renderer.getScreenHeight();
+        if (SETTINGS.uiTheme == CrossPointSettings::MINIMAL || SETTINGS.uiTheme == CrossPointSettings::DASHBOARD) {
+          beginPlayInput(SmokeStep::PlayMenu);
+          // The existing Minimal/Dashboard upward swipe reveals their menu.
+          inputScript.push_back(touchDown(width / 2, height * 3 / 4));
+          inputScript.push_back(touchMove(width / 2, height / 3));
+          inputScript.push_back(touchRelease(width / 2, height / 3));
+          inputScript.push_back(render("Minimal/Dashboard Home menu", 8));
+          inputScript.push_back(assertActivity("Home"));
+        } else if (SETTINGS.uiTheme == CrossPointSettings::COVER_GRID) {
+          capturePlayScreen("home-cover-grid");
+          beginPlayInput(SmokeStep::PlayFolder);
+          const auto safe = UITheme::getInstance().getScreenSafeArea(renderer, false);
+          // Play is the rightmost icon in CoverGrid's visible bottom tab bar.
+          addPlayTouch(width - UITheme::getInstance().getMetrics().headerSidePadding - 24, safe.y + safe.height - 44);
+          inputScript.push_back(render("Play from CoverGrid's gamepad tab", 8));
+          inputScript.push_back(assertActivity("ShelfFolder"));
+        } else {
+          step = SmokeStep::PlayMenu;
+        }
+        break;
+      }
+
+      case SmokeStep::PlayMenu:
+        capturePlayScreen(SETTINGS.uiTheme == CrossPointSettings::MINIMAL     ? "home-minimal-menu"
+                          : SETTINGS.uiTheme == CrossPointSettings::DASHBOARD ? "home-dashboard-menu"
+                                                                              : "home-lyra");
+        beginPlayInput(SmokeStep::PlayFolder);
+        addRegisteredHomeTouch(TouchRegistry::Item);
+        inputScript.push_back(render("Play from Home menu", 8));
+        inputScript.push_back(assertActivity("ShelfFolder"));
+        break;
+
+      case SmokeStep::PlayFolder: {
+        if (playThemePass == 0) capturePlayScreen("play-shelf");
+        if (playThemePass > 0) {
+          beginPlayInput(SmokeStep::PlayReturnedHome);
+          addPlayBack("Home after Play theme check", "Home");
+          break;
+        }
+        // Read the displayed registry to locate the game, then actually page
+        // the shelf with its side key and tap the visible row.
+        const auto& folder = shelf::folders()[0];
+        const int count = shelf::shownCount(0);
+        int gameRow = -1;
+        for (int row = 0; row < count; ++row) {
+          if (std::strcmp(folder.items[shelf::shownItem(0, row)].title, "MINESWEEPER") == 0) gameRow = row;
+        }
+        if (gameRow < 0) fail("Minesweeper is missing from the Play shelf");
+        const auto device = toybox::makeTarget(renderer).deviceContext();
+        const auto& tokens = toybox::themeTokens();
+        const auto paging = shelfui::pagingFor(device, tokens, folder.showsDeviceName, count);
+        const auto band = shelfui::listBand(device, folder.showsDeviceName, paging.pageCount > 1);
+        const int page = shelfui::pageFor(gameRow, paging.rowsPerPage);
+        const int currentPage = shelfui::pageFor(shelf::resumeRowIn(0), paging.rowsPerPage);
+        beginPlayInput(SmokeStep::PlayGameMenu);
+        for (int i = currentPage; i != page; i += page > currentPage ? 1 : -1) {
+          addTap(page > currentPage ? MappedInputManager::Button::Down : MappedInputManager::Button::Up);
+          inputScript.push_back(render("Play shelf page turn", 8));
+        }
+        addPlayTouch(
+            band.x + band.width / 2,
+            band.y + (gameRow % paging.rowsPerPage) * (tokens.rowHeight + tokens.listRowGap) + tokens.rowHeight / 2);
+        inputScript.push_back(render("Minesweeper opened from Play", 8));
+        inputScript.push_back(assertActivity("Minesweeper"));
+        break;
+      }
+
+      case SmokeStep::PlayGameMenu: {
+        beginPlayInput(SmokeStep::PlayGameBoard);
+        const int menuHeight = 2 * toybox::kRowHeight + toybox::kGutter / 2 + toybox::kGutter;
+        addPlayTouch(renderer.getScreenWidth() / 2,
+                     renderer.getScreenHeight() - toybox::kMargin - menuHeight + toybox::kRowHeight / 2);
+        inputScript.push_back(render("Minesweeper board started by PLAY row", 8));
+        inputScript.push_back(assertActivity("Minesweeper"));
+        // A temporary frontlight panel must restore and repaint the game,
+        // then allow the following cell tap through its normal reveal gate.
+        const int width = renderer.getScreenWidth();
+        const int height = renderer.getScreenHeight();
+        inputScript.push_back(touchDown(width / 2, 8));
+        inputScript.push_back(touchMove(width / 2, height / 4));
+        inputScript.push_back(touchRelease(width / 2, height / 4));
+        inputScript.push_back(render("Frontlight panel over Minesweeper", 8));
+        inputScript.push_back(assertActivity("FrontlightPanel"));
+        addPlayHomeTap();
+        inputScript.push_back(render("Minesweeper after frontlight panel", 8));
+        inputScript.push_back(assertActivity("Minesweeper"));
+        break;
+      }
+
+      case SmokeStep::PlayGameBoard: {
+        {
+          RenderLock lock;
+          playBoardHash = hashBytes(renderer.getFrameBuffer(), renderer.getBufferSize());
+        }
+        const auto cell = mineui::cellRect(toybox::makeTarget(renderer).deviceContext(), 4, 4);
+        beginPlayInput(SmokeStep::PlayGameMoved);
+        addPlayTouch(cell.x + cell.width / 2, cell.y + cell.height / 2);
+        inputScript.push_back(render("Minesweeper first cell revealed", 8));
+        inputScript.push_back(assertActivity("Minesweeper"));
+        break;
+      }
+
+      case SmokeStep::PlayGameMoved: {
+        {
+          RenderLock lock;
+          if (hashBytes(renderer.getFrameBuffer(), renderer.getBufferSize()) == playBoardHash)
+            fail("Minesweeper did not respond to a visible board-cell tap");
+        }
+        capturePlayScreen("minesweeper");
+        beginPlayInput(SmokeStep::PlayReturnedHome);
+        addPlayBack("Minesweeper menu after Back swipe", "Minesweeper");
+        addPlayBack("Play after leaving Minesweeper", "ShelfFolder");
+        addPlayBack("Home after leaving Play", "Home");
+        break;
+      }
+
+      case SmokeStep::PlayReturnedHome: {
+        LOG_INF("SMOKE", "Play Home entry and return passed for theme %d", SETTINGS.uiTheme);
+        if (playThemePass > 0) {
+          step = SmokeStep::PlayNextTheme;
+          break;
+        }
+        verifyPlayReaderProgress();
+        const char* bookPath = std::getenv("CROSSINK_SIMULATOR_SMOKE_BOOK");
+        const auto stats = BookReadingStats::load(Epub(bookPath, "/.crosspoint").getCachePath());
+        if (stats.sessionCount != playReaderStats.sessionCount ||
+            stats.totalReadingSeconds != playReaderStats.totalReadingSeconds ||
+            stats.totalPagesTurned != playReaderStats.totalPagesTurned)
+          fail("Playing changed the book's reading statistics");
+        if (RECENT_BOOKS.getBooks().empty() || RECENT_BOOKS.getBooks().front().path != bookPath)
+          fail("Play displaced the current book from recent reading");
+        beginPlayInput(SmokeStep::PlayResumedReader);
+        addRegisteredHomeTouch(TouchRegistry::Cover, 0);
+        inputScript.push_back(render("EPUB resumed from Home after Play", 20));
+        inputScript.push_back(assertActivity("EpubReader"));
+        break;
+      }
+
+      case SmokeStep::PlayResumedReader:
+        if (activityManager.getCurrentBookPath() != std::getenv("CROSSINK_SIMULATOR_SMOKE_BOOK"))
+          fail("Play return reopened the wrong book");
+        if (playReaderBodyHash() != playReaderPageHash) fail("EPUB resumed with different page content after Play");
+        verifyPlayReaderProgress();
+        capturePlayScreen("reader-after-play");
+        LOG_INF("SMOKE", "Play EPUB page content, saved position, recents and reading statistics preserved");
+        beginPlayInput(SmokeStep::PlayNextTheme);
+        addPlayHomeTap();
+        inputScript.push_back(render("Home after Play reader continuity check", 8));
+        inputScript.push_back(assertActivity("Home"));
+        break;
+
+      case SmokeStep::PlayNextTheme: {
+        static constexpr uint8_t themes[] = {CrossPointSettings::LYRA, CrossPointSettings::MINIMAL,
+                                             CrossPointSettings::DASHBOARD, CrossPointSettings::COVER_GRID};
+        if (++playThemePass == sizeof(themes) / sizeof(themes[0])) {
+          LOG_INF("SMOKE", "Play navigation, game input, reader continuity and four Home themes passed");
+          LOG_INF("SMOKE", "Simulator smoke test passed");
+          std::_Exit(0);
+        }
+        // Theme selection is fixture setup; every Play launch and return uses
+        // normal visible touch targets and the device's Back gesture.
+        {
+          RenderLock lock;
+          SETTINGS.uiTheme = themes[playThemePass];
+          UITheme::getInstance().reload();
+        }
+        activityManager.goHome();
+        queueStep("Home for next Play theme", SmokeStep::PlayHome, 8);
+        break;
+      }
+#endif
+
       case SmokeStep::Done:
         if (SETTINGS.uiTheme == CrossPointSettings::LYRA_CAROUSEL && carouselCachePass == 0 &&
             std::getenv("CROSSINK_SIMULATOR_SMOKE_BOOK")) {
@@ -2774,7 +3140,18 @@ class SimulatorSmokeTest {
         break;
       case ScriptActionType::HomeTap:
         simulatorHomeKeyInput.injectTap();
+#if defined(CROSSINK_PLAY)
+        playHomeTapStartedAt = millis();
+#endif
         break;
+#if defined(CROSSINK_PLAY)
+      case ScriptActionType::WaitForHomeTap:
+        // Production defers a single capacitive Home tap for 300 ms to
+        // distinguish a double tap. Keep dispatching normal loops while it
+        // resolves; a fixed frame count can finish too soon on the simulator.
+        if (millis() - playHomeTapStartedAt < 400) --scriptIndex;
+        break;
+#endif
       case ScriptActionType::HomeLongPress:
         simulatorHomeKeyInput.injectLongPress();
         break;

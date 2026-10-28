@@ -1,4 +1,6 @@
-#ifdef SIMULATOR
+// Play builds use intentional SD-card updates until this fork has a release
+// endpoint. An upstream OTA would replace Play with ordinary CrossInk.
+#if defined(SIMULATOR) || defined(CROSSINK_PLAY)
 #include "OtaUpdater.h"
 
 bool OtaUpdater::isUpdateNewer() const { return false; }

@@ -1,0 +1,4 @@
+# Generate with python3 scripts/generate_icons.py --library lucide \
+#   --manifest src/components/icons/playIcons.manifest --sizes 24,32 \
+#   --out src/components/icons/playIcons.h
+crossink-play = gamepad-2

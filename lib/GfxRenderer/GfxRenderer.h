@@ -24,6 +24,9 @@ class SdCardFont;
 #include <vector>
 
 #include "Bitmap.h"
+#if defined(CROSSINK_PLAY)
+#include "PaintClock.h"
+#endif
 
 namespace glyphBitmap {
 struct Frame;
@@ -51,6 +54,10 @@ class GfxRenderer {
   HalDisplay& display;
   RenderMode renderMode;
   mutable bool absoluteGrayPlanes = false;
+#if defined(CROSSINK_PLAY)
+  // A started async waveform does not reveal a game screen until waited for.
+  mutable paintclock::PaintCompletion playPaint;
+#endif
   Orientation orientation;
   bool fadingFix;
   uint8_t* frameBuffer = nullptr;

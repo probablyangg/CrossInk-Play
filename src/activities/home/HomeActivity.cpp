@@ -40,6 +40,9 @@
 #include "components/themes/lyra/LyraCarouselTheme.h"
 #include "components/themes/minimal/MinimalTheme.h"
 #include "fontIds.h"
+#if defined(CROSSINK_PLAY)
+#include "apps_local/Shelf.h"
+#endif
 
 namespace {
 constexpr uint32_t CAROUSEL_CACHE_MAGIC = 0x43434152;  // "CCAR"
@@ -62,6 +65,9 @@ enum class HomeMenuAction {
   Bookmarks,
   FileTransfer,
   Settings,
+#if defined(CROSSINK_PLAY)
+  Play,
+#endif
 };
 
 struct HomeMenuEntry {
@@ -71,7 +77,12 @@ struct HomeMenuEntry {
 };
 
 struct HomeMenuEntries {
-  static constexpr int kCapacity = 8;
+  static constexpr int kCapacity =
+#if defined(CROSSINK_PLAY)
+      9;
+#else
+      8;
+#endif
   std::array<HomeMenuEntry, kCapacity> entries{};
   int count = 0;
 
@@ -250,6 +261,9 @@ void appendHomeMenuItems(HomeMenuEntries& items, bool hasOpdsServers, bool hasRe
 
   items.push({tr(STR_FILE_TRANSFER), Transfer, HomeMenuAction::FileTransfer});
   items.push({tr(STR_SETTINGS_TITLE), Settings, HomeMenuAction::Settings});
+#if defined(CROSSINK_PLAY)
+  items.push({tr(STR_PLAY), UIIcon::Play, HomeMenuAction::Play});
+#endif
 }
 
 HomeMenuEntries buildHomeMenuItems(bool hasOpdsServers, bool hasReadingStats, bool hasBookmarks, bool hasClippings) {
@@ -277,6 +291,9 @@ HomeMenuEntries buildMinimalMenuItems(bool hasOpdsServers, bool hasReadingStats,
   }
 
   items.push({tr(STR_FILE_TRANSFER), Transfer, HomeMenuAction::FileTransfer});
+#if defined(CROSSINK_PLAY)
+  items.push({tr(STR_PLAY), UIIcon::Play, HomeMenuAction::Play});
+#endif
   return items;
 }
 
@@ -529,9 +546,12 @@ static_assert(HomeActivity::kMaxCachedBooks >= LyraCarouselMetrics::values.homeR
               "kMaxCachedBooks must cover all carousel slots");
 
 int HomeActivity::getMenuItemCount() const {
-  if (coverGridUi) return static_cast<int>(recentBooks.size()) + (hasOpdsServers ? 5 : 4);
+  if (coverGridUi) return static_cast<int>(recentBooks.size()) + CoverGridHomeUi::tabCount(hasOpdsServers);
   const auto& metrics = UITheme::getInstance().getMetrics();
   int count = 4;  // File Browser, Library, File transfer, Settings
+#if defined(CROSSINK_PLAY)
+  count++;
+#endif
   if (!metrics.homeContinueReadingInMenu && !recentBooks.empty()) {
     count += getVisibleRecentBookCount();
   } else if (metrics.homeContinueReadingInMenu && !recentBooks.empty()) {
@@ -910,6 +930,26 @@ void HomeActivity::onEnter() {
       selectorIndex = getHomeMenuSelectionOffset(recentBooks) + menuIndex;
     }
   }
+
+#if defined(CROSSINK_PLAY)
+  // Consume the shelf's one-shot breadcrumb on this Home entry only. Returning
+  // later from reading or Settings keeps CrossInk's ordinary selection.
+  if (shelf::takeHomeReturn()) {
+    if (coverGridUi) {
+      selectorIndex = static_cast<int>(recentBooks.size()) + CoverGridHomeUi::tabCount(hasOpdsServers) - 1;
+    } else if (usesMinimalHomeInteraction()) {
+      const auto items = buildMinimalMenuItems(hasOpdsServers, hasReadingStats, hasBookmarks, hasClippings);
+      minimalMenuIndex = findMenuActionIndex(items, HomeMenuAction::Play);
+      minimalMenuOpen = minimalMenuIndex >= 0;
+      minimalSuppressInitialFrontRelease = false;
+    } else {
+      const auto items = buildSelectableHomeMenuItems(hasOpdsServers, hasReadingStats, hasBookmarks, hasClippings,
+                                                      metrics.homeContinueReadingInMenu && !recentBooks.empty());
+      const int index = findMenuActionIndex(items, HomeMenuAction::Play);
+      if (index >= 0) selectorIndex = getHomeMenuSelectionOffset(recentBooks) + index;
+    }
+  }
+#endif
 
   if (isCarouselTheme && hasValidCarouselDiskCache(recentBooks, renderer, getHighlightedBookIndex())) {
     preRenderCarouselFrames();
@@ -1402,7 +1442,7 @@ void HomeActivity::loop() {
     }
 
     const int bookCount = static_cast<int>(recentBooks.size());
-    const int tabCount = hasOpdsServers ? 5 : 4;
+    const int tabCount = CoverGridHomeUi::tabCount(hasOpdsServers);
     const auto cycleBand = [this](const int base, const int count, const int dir) {
       if (count <= 0) return;
       const int current = selectorIndex - base;
@@ -1475,6 +1515,11 @@ void HomeActivity::loop() {
           case HomeMenuAction::FileTransfer:
             onFileTransferOpen();
             break;
+#if defined(CROSSINK_PLAY)
+          case HomeMenuAction::Play:
+            onPlayOpen();
+            break;
+#endif
           case HomeMenuAction::ContinueReading:
           case HomeMenuAction::Settings:
             break;
@@ -1723,6 +1768,11 @@ void HomeActivity::loop() {
       case HomeMenuAction::Settings:
         onSettingsOpen();
         break;
+#if defined(CROSSINK_PLAY)
+      case HomeMenuAction::Play:
+        onPlayOpen();
+        break;
+#endif
     }
   };
 
@@ -1980,6 +2030,12 @@ void HomeActivity::activateCoverGridSelection() {
     return;
   }
   const int tab = selectorIndex - static_cast<int>(recentBooks.size());
+#if defined(CROSSINK_PLAY)
+  if (tab == CoverGridHomeUi::tabCount(hasOpdsServers) - 1) {
+    onPlayOpen();
+    return;
+  }
+#endif
   switch (tab) {
     case 0:
       onFileBrowserOpen();
@@ -2328,6 +2384,10 @@ void HomeActivity::onContinueReading() {
 void HomeActivity::onLibraryOpen() { activityManager.goToLibrary(); }
 
 void HomeActivity::onSettingsOpen() { activityManager.goToSettings(); }
+
+#if defined(CROSSINK_PLAY)
+void HomeActivity::onPlayOpen() { shelf::openFolder(0, renderer, mappedInput); }
+#endif
 
 void HomeActivity::onFileTransferOpen() { activityManager.goToFileTransfer(); }
 

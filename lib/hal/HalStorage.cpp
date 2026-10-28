@@ -232,6 +232,10 @@ uint64_t HalStorage::totalBytes() const { return SDCard.sdTotalBytes(); }
 
 uint64_t HalStorage::usedBytes() { HAL_STORAGE_WRAPPED_CALL(sdUsedBytes); }
 
+#if defined(CROSSINK_PLAY)
+bool HalStorage::freeBytes(uint64_t& out) { HAL_STORAGE_WRAPPED_CALL(sdFreeBytes, out); }
+#endif
+
 std::vector<String> HalStorage::listFiles(const char* path, int maxFiles) {
   HAL_STORAGE_WRAPPED_CALL(listFiles, path, maxFiles);
 }
@@ -391,6 +395,20 @@ bool HalStorage::openFileForWrite(const char* moduleName, const char* path, HalF
 bool HalStorage::openFileForWrite(const char* moduleName, const std::string& path, HalFile& file) {
   return openFileForWrite(moduleName, path.c_str(), file);
 }
+
+#if defined(CROSSINK_PLAY)
+bool HalStorage::openFileForAppend(const char* moduleName, const char* path, HalFile& file) {
+  // open() owns the storage lock and recoverable wrapper allocation. Closing
+  // outside that lock avoids nesting the non-recursive storage mutex.
+  file.close();
+  file = open(path, O_RDWR | O_CREAT | O_AT_END);
+  if (!file) {
+    LOG_ERR(moduleName, "Failed to open %s for append", path);
+    return false;
+  }
+  return true;
+}
+#endif
 
 bool HalStorage::openFileForWrite(const char* moduleName, const String& path, HalFile& file) {
   return openFileForWrite(moduleName, path.c_str(), file);

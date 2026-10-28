@@ -1,0 +1,41 @@
+diff --git a/libs/hardware/SDCardManager/include/SDCardManager.h b/libs/hardware/SDCardManager/include/SDCardManager.h
+index 50d87bd..02949de 100644
+--- a/libs/hardware/SDCardManager/include/SDCardManager.h
++++ b/libs/hardware/SDCardManager/include/SDCardManager.h
+@@ -38,6 +38,10 @@ class SDCardManager {
+   // scans the FAT and is too slow to call on every frame). 0 if not mounted or
+   // the cluster count cannot be determined.
+   uint64_t sdUsedBytes();
++#if defined(CROSSINK_PLAY)
++  // Fresh filesystem query; false leaves out untouched, including on I/O error.
++  bool sdFreeBytes(uint64_t& out);
++#endif
+   std::vector<String> listFiles(const char* path = "/", int maxFiles = 200);
+   // Read the entire file at `path` into a String. Returns empty string on failure.
+   String readFile(const char* path);
+diff --git a/libs/hardware/SDCardManager/src/SDCardManager.cpp b/libs/hardware/SDCardManager/src/SDCardManager.cpp
+index 4cb3fed..4bd23b5 100644
+--- a/libs/hardware/SDCardManager/src/SDCardManager.cpp
++++ b/libs/hardware/SDCardManager/src/SDCardManager.cpp
+@@ -494,6 +494,21 @@ bool SDCardManager::openFileForWrite(const char* moduleName, const String& path,
+ 
+ uint64_t SDCardManager::sdTotalBytes() const { return cachedTotalBytes; }
+ 
++#if defined(CROSSINK_PLAY)
++bool SDCardManager::sdFreeBytes(uint64_t& out) {
++  if (!initialized) return false;
++  const int32_t freeClusters = vol().freeClusterCount();
++  const uint64_t clusterCount = vol().clusterCount();
++  const uint32_t clusterBytes = vol().bytesPerCluster();
++  if (freeClusters < 0 || clusterCount == 0 || clusterBytes == 0 ||
++      static_cast<uint64_t>(freeClusters) > clusterCount) {
++    return false;
++  }
++  out = static_cast<uint64_t>(freeClusters) * clusterBytes;
++  return true;
++}
++#endif
++
+ uint64_t SDCardManager::sdUsedBytes() {
+   if (!initialized) return 0;
+   const uint32_t now = millis();

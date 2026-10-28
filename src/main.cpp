@@ -103,6 +103,9 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
 #include "activities/settings/KOReaderSettingsActivity.h"
 #include "activities/settings/OtaUpdateActivity.h"
 #include "activities/settings/SdFirmwareUpdateActivity.h"
+#if defined(CROSSINK_PLAY)
+#include "apps_local/Shelf.h"
+#endif
 #include "components/UITheme.h"
 #include "components/icons/tablerFilledIcons.h"
 #include "fontIds.h"
@@ -1096,6 +1099,11 @@ void enterDeepSleep(bool fromTimeout) {
   // it visible until the first useful reader or Home paint replaces it.
   APP_STATE.showBootScreen = false;
 
+#if defined(CROSSINK_PLAY)
+  // Record the game before the sleep activity replaces it.
+  shelf::rememberForWake(activityManager.sleepContextActivityName());
+#endif
+
   // Commit to sleeping before goToSleep() runs the outgoing activity's onExit():
   // a WiFi activity would otherwise silentRestart() here and reboot instead.
   deepSleepInProgress = true;
@@ -1565,6 +1573,12 @@ void setup() {
     // by network screens. Keep X3's existing full refresh behavior unchanged.
     const auto homeRefreshMode = gpio.deviceIsX3() ? HalDisplay::FULL_REFRESH : HalDisplay::HALF_REFRESH;
     activityManager.goHome(HomeMenuItem::NONE, homeRefreshMode);
+#if defined(CROSSINK_PLAY)
+  } else if (isSleepWake && !APP_STATE.lastSleepFromReader &&
+             !mappedInputManager.isPressed(MappedInputManager::Button::Back) &&
+             shelf::resumeFromWake(renderer, mappedInputManager)) {
+    // Games restore only after a normal sleep wake; recovery and panic routing take priority.
+#endif
   } else if (APP_STATE.openEpubPath.empty() || !APP_STATE.lastSleepFromReader ||
              mappedInputManager.isPressed(MappedInputManager::Button::Back) || APP_STATE.readerActivityLoadCount > 0) {
     // Boot to home screen if no book is open, last sleep was not from reader, back button is held, or reader activity

@@ -11,6 +11,9 @@
 #include "components/UITheme.h"
 #include "components/UIThemeTokens.h"
 #include "components/icons/listIcons.h"
+#if defined(CROSSINK_PLAY)
+#include "components/icons/playIcons.h"
+#endif
 
 // Shared glue for activities hosting a FreeInkApp: the font-bound render
 // target and the touch snapshot FreeInkApp routing consumes.
@@ -104,6 +107,10 @@ inline freeink::ui::BitmapRef listIconFor(const UIIcon icon, const int size = 24
         return freeink::ui::bitmapFromIcon(icon_lyra_library_32);
       case UIIcon::Hotspot:
         return freeink::ui::bitmapFromIcon(icon_radio_tower_32);
+#if defined(CROSSINK_PLAY)
+      case UIIcon::Play:
+        return freeink::ui::bitmapFromIcon(icon_crossink_play_32);
+#endif
       default:
         return {};
     }
@@ -127,6 +134,10 @@ inline freeink::ui::BitmapRef listIconFor(const UIIcon icon, const int size = 24
       return freeink::ui::bitmapFromIcon(icon_lyra_library_24);
     case UIIcon::Hotspot:
       return freeink::ui::bitmapFromIcon(icon_radio_tower_24);
+#if defined(CROSSINK_PLAY)
+    case UIIcon::Play:
+      return freeink::ui::bitmapFromIcon(icon_crossink_play_24);
+#endif
     default:
       return {};
   }

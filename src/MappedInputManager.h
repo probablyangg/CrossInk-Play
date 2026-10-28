@@ -237,6 +237,10 @@ class MappedInputManager {
   constexpr bool wasReaderLightPanelGesture() const { return false; }
   constexpr bool wasReaderMenuHold() const { return false; }
 #endif
+#if defined(CROSSINK_PLAY)
+  // CrossPlay's name for suppressing the remainder of the current contact.
+  void swallowCurrentTouch() { suppressCurrentTouchContact(); }
+#endif
   // Directions for tabbed menus, derived from the physical button layout.
   Button menuButton(Button direction) const;
   bool wasAnyPressed() const;

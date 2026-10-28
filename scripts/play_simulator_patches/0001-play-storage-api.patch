@@ -1,0 +1,65 @@
+diff --git a/src/HalStorage.cpp b/src/HalStorage.cpp
+index 3ca47bf..c11f44f 100644
+--- a/src/HalStorage.cpp
++++ b/src/HalStorage.cpp
+@@ -127,6 +127,34 @@ uint64_t HalStorage::usedBytes() {
+              : UINT64_MAX; // Fail closed if the preceding total query succeeded.
+ }
+ 
++#if defined(CROSSINK_PLAY)
++bool HalStorage::freeBytes(uint64_t &out) {
++  struct statvfs stats{};
++  if (!storageStats(stats) || stats.f_frsize == 0 || stats.f_bavail > stats.f_blocks)
++    return false;
++  out = uint64_t(stats.f_bavail) * stats.f_frsize;
++  return true;
++}
++
++bool HalStorage::openFileForAppend(const char *, const char *path, HalFile &file) {
++  // SdFat's O_AT_END seeks once; it does not force every later write to append.
++  file = open(path, O_RDWR | O_CREAT);
++  if (!file.isOpen())
++    return false;
++  if (!file.seek(file.size())) {
++    file.close();
++    return false;
++  }
++  return true;
++}
++bool HalStorage::openFileForAppend(const char *moduleName, const std::string &path, HalFile &file) {
++  return openFileForAppend(moduleName, path.c_str(), file);
++}
++bool HalStorage::openFileForAppend(const char *moduleName, const String &path, HalFile &file) {
++  return openFileForAppend(moduleName, path.c_str(), file);
++}
++#endif
++
+ class HalFile::Impl {
+ public:
+   int fd = -1;
+diff --git a/src/HalStorage.h b/src/HalStorage.h
+index 9c0392c..74b4bc9 100644
+--- a/src/HalStorage.h
++++ b/src/HalStorage.h
+@@ -25,6 +25,9 @@ public:
+   // Host filesystem capacity, not a modeled SD-card/device resource limit.
+   uint64_t totalBytes() const;
+   uint64_t usedBytes();
++#if defined(CROSSINK_PLAY)
++  bool freeBytes(uint64_t &out);
++#endif
+   std::vector<String> listFiles(const char *path = "/", int maxFiles = 200);
+   // Read the entire file at `path` into a String. Returns empty string on
+   // failure.
+@@ -66,6 +69,11 @@ public:
+   bool openFileForWrite(const char *moduleName, const String &path,
+                         HalFile &file);
+   bool removeDir(const char *path);
++#if defined(CROSSINK_PLAY)
++  bool openFileForAppend(const char *moduleName, const char *path, HalFile &file);
++  bool openFileForAppend(const char *moduleName, const std::string &path, HalFile &file);
++  bool openFileForAppend(const char *moduleName, const String &path, HalFile &file);
++#endif
+ 
+   static HalStorage &getInstance() { return instance; }
+ 

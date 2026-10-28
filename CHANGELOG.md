@@ -1,3 +1,27 @@
+## [CrossInk Play 0.1.0-alpha.1] - 2026-10-28
+
+### Added
+
+- A Play section for Xteink X4 Pro with all 25 games from CrossPlay v1.14.2,
+  using CrossInk v1.6.1 as the reader base.
+- Play navigation across the Home themes, including Minimal, Dashboard,
+  and Cover Grid; returning from the game shelf restores the Play selection.
+- Game save storage, nearby multiplayer support, and normal game sleep/wake
+  routing, with reader recovery behavior taking priority.
+- Desktop checks for game rules, persistence, layout, input reveal timing,
+  and the Home/Play/reader journey.
+
+### Changed
+
+- X4 Pro Play builds use two 0x7f0000-byte application slots; initial
+  installation requires the supplied USB image and partition table.
+- Upstream automatic firmware updates are disabled in Play builds to keep
+  a normal CrossInk update from replacing the games. Manual SD updates remain.
+
+### Status
+
+- Personal alpha. Physical X4 Pro validation is still required.
+
 ## [v1.6.1] - 2026-10-03
 
 ### Added

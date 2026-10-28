@@ -183,6 +183,13 @@ class ActivityManager {
   bool openReaderMenuFromShortcut();
   bool handleShortcutAction(uint8_t action);
   bool hasActivityNamed(const char* activityName) const;
+#if defined(CROSSINK_PLAY)
+  // Main-task query; a queued replacement/push is the activity being opened.
+  // Shelf records its name immediately after requesting the transition.
+  const char* currentActivityName() const;
+  // The Play activity below its temporary frontlight overlay still owns sleep.
+  const char* sleepContextActivityName() const;
+#endif
 #ifdef SIMULATOR
   bool isCurrentActivityNamed(const char* activityName) const;
   Activity* simulatorCurrentActivity() const { return currentActivity.get(); }

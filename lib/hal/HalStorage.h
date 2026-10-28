@@ -31,6 +31,10 @@ class HalStorage {
   void shutdown();
   uint64_t totalBytes() const;
   uint64_t usedBytes();
+#if defined(CROSSINK_PLAY)
+  // Leave out untouched when the filesystem cannot report a reliable count.
+  bool freeBytes(uint64_t& out);
+#endif
   std::vector<String> listFiles(const char* path = "/", int maxFiles = 200);
   // Read the entire file at `path` into a String. Returns empty string on failure.
   String readFile(const char* path);
@@ -67,6 +71,9 @@ class HalStorage {
   bool openFileForWrite(const char* moduleName, const char* path, HalFile& file);
   bool openFileForWrite(const char* moduleName, const std::string& path, HalFile& file);
   bool openFileForWrite(const char* moduleName, const String& path, HalFile& file);
+#if defined(CROSSINK_PLAY)
+  bool openFileForAppend(const char* moduleName, const char* path, HalFile& file);
+#endif
   bool removeDir(const char* path);
 
   static HalStorage& getInstance() { return instance; }

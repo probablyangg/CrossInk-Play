@@ -13,6 +13,9 @@
 #include "GfxRenderer.h"
 #include "MappedInputManager.h"
 #include "RenderLock.h"
+#if defined(CROSSINK_PLAY)
+#include "RevealedInteractions.h"
+#endif
 #include "util/QuickLockTrigger.h"
 #include "util/ScreenshotInfo.h"
 
@@ -28,6 +31,10 @@ class Activity {
 
   ActivityResultHandler resultHandler;
   ActivityResult result;
+#if defined(CROSSINK_PLAY)
+  paintclock::SurfaceGate surfaceGate;
+  bool playActivity = false;
+#endif
 
   // Use when a screen exits on Back press instead of Back release so the
   // parent screen does not also receive the held button's release.
@@ -42,6 +49,22 @@ class Activity {
   virtual void loop() {}
 
   virtual void render(RenderLock&&) {}
+
+#if defined(CROSSINK_PLAY)
+  // Games with geometry-based hit tests describe the meaning of a board tap.
+  // Cosmetic redraws keep accepting input; a changed meaning waits for paint.
+  virtual uint32_t surfaceMeaning() const { return 0; }
+  bool surfaceRevealed() const { return surfaceGate.routable(surfaceMeaning()); }
+  void noteSurfaceBuilt() { surfaceGate.noteBuilt(surfaceMeaning()); }
+  // Shelf marks its activities before launching them. Reader lifecycle and
+  // overlay input remain unchanged in the same firmware.
+  void setPlayActivity() { playActivity = true; }
+  bool isPlayActivity() const { return playActivity; }
+  void invalidatePlayFrame() {
+    if (playActivity) surfaceGate.invalidate();
+  }
+  bool playFrameRevealed() const { return !playActivity || surfaceGate.revealed(); }
+#endif
 
   // Let activities that need more than a framebuffer refresh prepare a full redraw.
   virtual bool prepareManualRefresh() { return false; }

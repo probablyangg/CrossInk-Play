@@ -485,6 +485,9 @@ void ActivityManager::renderTaskLoop() {
       // Apply Night Mode to each activity's normal-polarity frame. SleepActivity
       // preserves it only for Quick Resume and clears it for other sleep screens.
       display.setInverted(SETTINGS.screenInverted != 0);
+#if defined(CROSSINK_PLAY)
+      currentActivity->noteSurfaceBuilt();
+#endif
       currentActivity->render(std::move(lock));
       restoredActivityNeedsRender = false;
     }
@@ -521,7 +524,11 @@ void ActivityManager::loop() {
     finishLiveLightSwipe(twoFingerLightSwipe, *this);
 #endif
 
-  if (currentActivity) {
+  if (currentActivity
+#if defined(CROSSINK_PLAY)
+      && currentActivity->playFrameRevealed()
+#endif
+  ) {
     mappedInput.setPowerAsConfirmInReaderMode(currentActivity->allowPowerAsConfirmInReaderMode());
 
     if (currentActivity->blocksGlobalInput()) {
@@ -607,6 +614,18 @@ void ActivityManager::loop() {
         currentActivity = std::move(stackActivities.back());
         stackActivities.pop_back();
         restoredActivityNeedsRender = true;
+#if defined(CROSSINK_PLAY)
+        // The popped overlay is still on the panel. Its paint must not make
+        // an old game table routable before the game's own redraw completes.
+        currentActivity->invalidatePlayFrame();
+        if (currentActivity->isPlayActivity()) {
+          int touchX = 0;
+          int touchY = 0;
+          // A Home-key dismissal can leave a finger resting on a light slider.
+          // It must not turn into a board tap/hold when the redraw completes.
+          if (mappedInput.isScreenTouchHeld(touchX, touchY)) mappedInput.suppressCurrentTouchContact();
+        }
+#endif
 
         if (closedFrontlightPanel) currentActivity->onFrontlightPanelClosed();
 
@@ -1141,6 +1160,28 @@ bool ActivityManager::hasActivityNamed(const char* activityName) const {
 
   return std::any_of(stackActivities.begin(), stackActivities.end(), matches);
 }
+
+#if defined(CROSSINK_PLAY)
+const char* ActivityManager::currentActivityName() const {
+  // replaceActivity() defers the swap until loop(). Shelf asks immediately
+  // after requesting a game, so returning the old folder would lose wake
+  // restore when rememberForWake() compares it with the running game later.
+  if (pendingActivity) return pendingActivity->name.c_str();
+  return currentActivity ? currentActivity->name.c_str() : "";
+}
+
+const char* ActivityManager::sleepContextActivityName() const {
+  const Activity* active = pendingActivity ? pendingActivity.get() : currentActivity.get();
+  if (active && active->name == "FrontlightPanel") {
+    // A push can be queued before the first sleep check in the next main loop.
+    const Activity* beneath = pendingActivity && pendingAction == PendingAction::Push
+                                  ? currentActivity.get()
+                                  : (stackActivities.empty() ? nullptr : stackActivities.back().get());
+    if (beneath && beneath->isPlayActivity()) return beneath->name.c_str();
+  }
+  return currentActivityName();
+}
+#endif
 
 #ifdef SIMULATOR
 bool ActivityManager::isCurrentActivityNamed(const char* activityName) const {

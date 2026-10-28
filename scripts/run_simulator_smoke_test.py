@@ -34,6 +34,7 @@ THEMES = {
     "lyra-carousel": 4,
     "lyra_carousel": 4,
     "carousel": 4,
+    "minimal": 5,
     "dashboard": 6,
     "cover-grid": 7,
 }
@@ -98,6 +99,12 @@ def run_smoke(args: argparse.Namespace) -> int:
             env["CROSSINK_SIMULATOR_SMOKE_FRONTLIGHT_CAPTURES"] = str(capture_dir)
         if args.home_themes:
             env["CROSSINK_SIMULATOR_SMOKE_HOME_THEMES"] = "1"
+        if args.play:
+            env["CROSSINK_SIMULATOR_SMOKE_PLAY"] = "1"
+        if args.play_captures:
+            capture_dir = Path(args.play_captures).resolve()
+            capture_dir.mkdir(parents=True, exist_ok=True)
+            env["CROSSINK_SIMULATOR_SMOKE_PLAY_CAPTURES"] = str(capture_dir)
         if args.theme:
             env["CROSSINK_SIMULATOR_SMOKE_THEME"] = str(THEMES[args.theme])
         if args.headless:
@@ -111,7 +118,7 @@ def run_smoke(args: argparse.Namespace) -> int:
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            timeout=args.timeout if args.timeout is not None else (180 if args.frontlight_layout else 45),
+            timeout=args.timeout if args.timeout is not None else (180 if args.frontlight_layout else 90 if args.play else 45),
         )
 
     print(proc.stdout, end="")
@@ -127,6 +134,10 @@ def run_smoke(args: argparse.Namespace) -> int:
 
     if "Simulator smoke test passed" not in proc.stdout:
         print("Simulator smoke test did not print its success marker", file=sys.stderr)
+        return 2
+
+    if args.play and "Play navigation, game input, reader continuity and four Home themes passed" not in proc.stdout:
+        print("Simulator did not run the requested Play scenario (rebuild with CROSSINK_PLAY)", file=sys.stderr)
         return 2
 
     if args.font_family:
@@ -146,13 +157,15 @@ def parse_args() -> argparse.Namespace:
                         help="PlatformIO simulator environment to build and run")
     parser.add_argument("--font-dir", help="Font fixtures copied into isolated /fonts")
     parser.add_argument("--font-family", help="Exercise custom-font size and dictionary lifecycle")
-    parser.add_argument("--timeout", type=int, help="Seconds before the simulator run is treated as hung (default: 45, or 180 for frontlight layout)")
+    parser.add_argument("--timeout", type=int, help="Seconds before the simulator run is treated as hung (default: 45, 90 for Play, or 180 for frontlight layout)")
     parser.add_argument("--page-turns", type=int, default=2, help="Number of EPUB page-forward taps to run")
     parser.add_argument("--theme", choices=sorted(THEMES), help="UI theme to use during the smoke test")
     parser.add_argument("--frontlight-sync", action="store_true", help="Check frontlight sync outside the reader with stats enabled and disabled (X4 Pro)")
     parser.add_argument("--frontlight-layout", action="store_true", help="Check frontlight drawer bounds and handle taps across scales, orientations and themes (X4 Pro)")
     parser.add_argument("--frontlight-captures", help="Directory for frontlight layout framebuffer captures (PGM)")
     parser.add_argument("--home-themes", action="store_true", help="Compare drawer theme changes with fresh Home renders (X4 Pro)")
+    parser.add_argument("--play", action="store_true", help="Exercise Home, Play, Minesweeper, EPUB resume and four Home themes (CROSSINK_PLAY X4 Pro build)")
+    parser.add_argument("--play-captures", help="Directory for Play smoke framebuffer captures (PGM; use with --play)")
     parser.add_argument("--no-build", dest="build", action="store_false", help="Run the existing simulator binary")
     parser.add_argument("--window", dest="headless", action="store_false", help="Show the SDL window instead of using dummy video")
     parser.set_defaults(build=True, headless=True)

@@ -2394,6 +2394,9 @@ void GfxRenderer::invertRect(const int x, const int y, const int width, const in
 
 void GfxRenderer::displayBuffer(const HalDisplay::RefreshMode refreshMode, const bool turnOffScreen) const {
   display.displayBuffer(refreshMode, fadingFix || turnOffScreen);
+#if defined(CROSSINK_PLAY)
+  playPaint.completed();
+#endif
 }
 
 size_t GfxRenderer::readFramebufferRegion(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint8_t* dst,
@@ -2434,12 +2437,23 @@ void GfxRenderer::displayBufferAsync(const HalDisplay::RefreshMode refreshMode) 
   // relies on; keep those users on the blocking path.
   if (fadingFix) {
     display.displayBuffer(refreshMode, fadingFix);
+#if defined(CROSSINK_PLAY)
+    playPaint.completed();
+#endif
     return;
   }
   display.displayBufferAsync(refreshMode);
+#if defined(CROSSINK_PLAY)
+  playPaint.startedAsync();
+#endif
 }
 
-void GfxRenderer::waitRefreshComplete() const { display.waitRefreshComplete(); }
+void GfxRenderer::waitRefreshComplete() const {
+  display.waitRefreshComplete();
+#if defined(CROSSINK_PLAY)
+  playPaint.waited();
+#endif
+}
 
 bool GfxRenderer::supportsAsyncRefresh() const { return !fadingFix && display.supportsAsyncRefresh(); }
 
@@ -3096,6 +3110,9 @@ size_t GfxRenderer::getBufferSize() const { return frameBufferSize; }
 void GfxRenderer::displayGrayscaleBase(HalDisplay::RefreshMode fallback, const bool turnOffScreen) const {
   absoluteGrayPlanes = false;
   display.displayGrayscaleBase(fallback, fadingFix || turnOffScreen);
+#if defined(CROSSINK_PLAY)
+  playPaint.completed();
+#endif
 }
 
 void GfxRenderer::preconditionGrayscale() const { display.preconditionGrayscale(); }
@@ -3125,6 +3142,9 @@ void GfxRenderer::copyGrayscaleMsbBuffers() const { display.copyGrayscaleMsbBuff
 void GfxRenderer::displayGrayBuffer(const bool turnOffScreen) const {
   display.displayGrayBuffer(fadingFix || turnOffScreen);
   absoluteGrayPlanes = false;
+#if defined(CROSSINK_PLAY)
+  playPaint.completed();
+#endif
 }
 
 void GfxRenderer::writeGrayscalePlaneStrip(bool lsbPlane, const uint8_t* scratch, int yStart, int numRows) const {
@@ -3281,6 +3301,9 @@ bool GfxRenderer::displayAbsoluteGrayscaleBase(HalDisplay::RefreshMode fallback)
 #else
   if (!display.displayGrayscaleBase(HalDisplay::GrayscaleMode::Absolute, fallback, fadingFix)) return false;
   absoluteGrayPlanes = true;
+#if defined(CROSSINK_PLAY)
+  playPaint.completed();
+#endif
   return true;
 #endif
 }
@@ -3294,6 +3317,9 @@ bool GfxRenderer::displayDirectGrayscaleBase(HalDisplay::RefreshMode fallback) c
   // Direct uploads complete planes, so grayPlanePixel() must use the absolute
   // encoding rather than overlay masks.
   absoluteGrayPlanes = true;
+#if defined(CROSSINK_PLAY)
+  playPaint.completed();
+#endif
   return true;
 #endif
 }

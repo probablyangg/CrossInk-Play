@@ -170,7 +170,10 @@ enum UIIcon {
   Opds,
   Wifi,
   Hotspot,
-  Chart
+  Chart,
+#if defined(CROSSINK_PLAY)
+  Play,
+#endif
 };
 
 // Default theme implementation (Classic Theme)

@@ -102,6 +102,9 @@ class HomeActivity final : public Activity {
   void onContinueReading();
   void onLibraryOpen();
   void onSettingsOpen();
+#if defined(CROSSINK_PLAY)
+  void onPlayOpen();
+#endif
   void onFileTransferOpen();
   void onOpdsBrowserOpen();
   void onReadingStatsOpen();
