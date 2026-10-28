@@ -68,8 +68,14 @@ jobs:
       - name: Install PlatformIO Core
         run: uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
 
-      - name: Run cppcheck
-        run: pio check --fail-on-defect low --fail-on-defect medium --fail-on-defect high
+      # Keep the original four CrossInk reader profiles explicit. Play changes
+      # default_envs and adds a separately imported game implementation; its
+      # native, firmware, and simulator checks run in play-build.yml.
+      - name: Check reader code on all four CrossInk profiles
+        run: >-
+          pio check -e default -e sticky -e x4-pro -e x4-classic
+          --src-filters='+<src/> +<include/> -<src/apps_local/>'
+          --fail-on-defect low --fail-on-defect medium --fail-on-defect high
 
   build:
     # Firmware artifacts are validated on pull requests; release builds stay

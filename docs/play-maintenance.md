@@ -127,6 +127,14 @@ active alongside the Play workflows.
 
 ## Maintainer reference
 
+The retained CI workflow runs reader static analysis on all four original
+CrossInk board profiles, with all severity gates retained. Its source filter
+excludes the imported game implementation; Play integration reached through
+reader code is still checked. The Play workflow validates games with native
+suites, the X4 Pro build, and simulator journeys. Imported game cppcheck findings
+from the first scan are recorded in the [workflow reference](upstream-workflows/README.md);
+passing the Play workflow does not mean that game code is cppcheck-clean.
+
 The source manifest records the imported versions, dependency pins, and
 CrossPlay path mappings. Keep it accurate when manually importing a fix. An
 update to one game does not mean every game has been upgraded to a newer

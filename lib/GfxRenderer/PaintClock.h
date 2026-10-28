@@ -41,8 +41,8 @@
 namespace paintclock {
 
 inline std::atomic<uint32_t>& counter() {
-  static std::atomic<uint32_t> painted{0};
-  return painted;
+  static std::atomic<uint32_t> completedPaints{0};
+  return completedPaints;
 }
 
 // The panel has finished showing the framebuffer. Called by GfxRenderer at the
