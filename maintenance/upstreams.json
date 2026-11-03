@@ -9,8 +9,8 @@
   },
   "crossplay": {
     "repository": "ma-r-s/crossplay",
-    "tag": "v1.14.2",
-    "commit": "0a1d17f41e1605d3b033d4327c81b3bcfb2ca2ab",
+    "tag": "v1.14.4",
+    "commit": "5f02702301462e0ac0d6b25244ea43fd5f68dd5d",
     "scope": "Only the explicit imported paths below. This is not a full CrossPlay firmware merge. New games and changes outside these mappings require separate integration.",
     "mappings": [
       {
